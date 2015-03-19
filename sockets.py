@@ -1,6 +1,12 @@
 #!/usr/bin/env python
 # coding: utf-8
 # Copyright (c) 2013-2014 Abram Hindle
+# Copyright (c) 2015 Dylan Stankievech
+#
+# Some of this code was copied from my assignment 4 submission,
+# since the assignments were so similar. I didn't quite get websockets
+# working, woops!
+#
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -14,7 +20,7 @@
 # limitations under the License.
 #
 import flask
-from flask import Flask, request
+from flask import Flask, Response, request, redirect, url_for, render_template
 from flask_sockets import Sockets
 import gevent
 from gevent import queue
@@ -59,29 +65,53 @@ class World:
     def world(self):
         return self.space
 
-myWorld = World()        
+myWorld = World()
+toSend = list()
 
 def set_listener( entity, data ):
-    ''' do something with the update ! '''
+    # Send the update to all sockets
+    for socket in toSend:
+        socket.send(Json.dumps({entity:data}))
 
 myWorld.add_set_listener( set_listener )
         
 @app.route('/')
 def hello():
-    '''Return something coherent here.. perhaps redirect to /static/index.html '''
-    return None
+    ''' Return index page '''
+    return redirect(url_for('static', filename='index.html'))
 
-def read_ws(ws,client):
+def read_ws(ws):
     '''A greenlet function that reads from the websocket and updates the world'''
-    # XXX: TODO IMPLEMENT ME
-    return None
+    
+    # Read this socket forever
+    while True:
+
+        # Get the next message
+        message = ws.receive()
+
+        # Check that it wasn't an empty message
+        if message is not None:
+
+            # Get the data from json format
+            data = json.loads(message)
+            for entity in data:
+
+                # Update the world from this data
+                myWorld.space[entity] = data[entity]
 
 @sockets.route('/subscribe')
 def subscribe_socket(ws):
     '''Fufill the websocket URL of /subscribe, every update notify the
        websocket and read updates from the websocket '''
-    # XXX: TODO IMPLEMENT ME
-    return None
+    
+    # Add this socket
+    toSend.append(ws)
+
+    # Spawn a gevent to read from this websocket
+    g = gevent.spawn(read_ws, ws)
+
+    # Send the current world to this socket
+    ws.send(json.dumps(myWorld.space))
 
 
 def flask_post_json():
@@ -94,26 +124,43 @@ def flask_post_json():
     else:
         return json.loads(request.form.keys()[0])
 
+# Note: most of the code below was copied from my
+# Assignment 4 submission, since it seems we're supposed
+# to provide similar functionality for HTTP responses
+
 @app.route("/entity/<entity>", methods=['POST','PUT'])
 def update(entity):
-    '''update the entities via this interface'''
-    return None
+    ''' Update the specified entity with the supplied data '''
+    toUpdate = json.loads(request.data.decode('utf-8'))
+    decoded = entity.decode('utf-8')
+    myWorld.space[decoded] = toUpdate
+    toReturn = json.dumps(toUpdate)
+    return Response(toReturn, status=200, mimetype='application/json')
 
 @app.route("/world", methods=['POST','GET'])    
 def world():
-    '''you should probably return the world here'''
-    return None
+    ''' Return a json representation of the world '''
+    data = json.dumps(myWorld.space)
+    response = Response(data, status=200, mimetype='application/json')
+    return response
 
 @app.route("/entity/<entity>")    
 def get_entity(entity):
-    '''This is the GET version of the entity interface, return a representation of the entity'''
-    return None
+    ''' Handle a GET request for specified entity '''
+    decoded = entity.decode('utf-8')
+    toReturn = {}
+    if decoded in myWorld.space:
+        toReturn = myWorld.space[decoded]
+    data = json.dumps(toReturn)
+    response = Response(data, status=200, mimetype='application/json')
+    return response
 
 
 @app.route("/clear", methods=['POST','GET'])
 def clear():
-    '''Clear the world out!'''
-    return None
+    ''' Clear all entities in the world '''
+    myWorld.clear()
+    return Response(None, status=200)
 
 
 
