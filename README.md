@@ -7,6 +7,9 @@ See requirements.org (plain-text) for a description of the project.
 
 Make a shared state Websockets drawing program
 
+Code edited by Dylan Stankievech for the purposes of CMPUT410 Assignment 5
+Some of the code was copied from my submission for Assignment 4
+
 Prereqs
 =======
 
@@ -55,5 +58,6 @@ POSSIBILITY OF SUCH DAMAGE.
 Contributors
 ============
 
+* Dylan Stankievech
 * Mark Galloway
 * Abram Hindle
